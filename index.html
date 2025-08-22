@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cabin Escape 3</title>
+<style>
+  :root{
+    --ink:#1a1a1a;
+    --bg:#0e0e10;
+    --panel:#18181b;
+    --accent:#e11d48; /* crimson */
+    --wood:#a46a3a;
+    --wood-dark:#7c4c25;
+    --wood-lite:#d8a06f;
+    --stone:#7a7f86;
+    --sky:#98c7ff;
+    --win-frame:#e9eef7;
+    --shadow: 0 1px 0 rgba(0,0,0,.5), 0 6px 16px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:linear-gradient(180deg,#0b0b0d,#141419); color:#fafafa; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    user-select:none; -webkit-tap-highlight-color: transparent;
+    overflow:hidden;
+  }
+  /* Layout */
+  .game{position:relative; height:100vh; display:flex; flex-direction:column}
+  .topbar{display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(24,24,27,.9); border-bottom:2px solid #000; box-shadow:var(--shadow)}
+  .brand{font-weight:800; letter-spacing:.5px}
+  .btn{appearance:none; border:none; background:#2b2b30; color:#fff; padding:10px 14px; border-radius:14px; font-weight:700; cursor:pointer; box-shadow:var(--shadow); outline:2px solid rgba(255,255,255,.04)}
+  .btn:active{transform:translateY(1px)}
+  .scene{
+    position:relative; flex:1; overflow:hidden; border-top:1px solid rgba(0,0,0,.5);
+  }
+  .room{position:absolute; inset:0; display:none}
+  .room.active{display:block}
+  .nav{position:absolute; inset:0; pointer-events:none}
+  .nav .arrow{position:absolute; top:45%; width:68px; height:68px; border-radius:50%; backdrop-filter: blur(2px); background:rgba(255,255,255,.06); outline:3px solid rgba(0,0,0,.35); box-shadow:var(--shadow); display:grid; place-items:center; pointer-events:auto; cursor:pointer}
+  .nav .arrow svg{width:28px; height:28px; filter:drop-shadow(0 2px 0 rgba(0,0,0,.4))}
+  .nav .left{left:14px}
+  .nav .right{right:14px}
+  .nav .arrow.hidden{display:none}
+  /* Inventory */
+  .inventory{display:flex; gap:12px; padding:12px 14px; background:rgba(24,24,27,.95); border-top:2px solid #000; box-shadow:0 -6px 12px rgba(0,0,0,.35)}
+  .slot{flex:1; min-width:0; height:64px; background:linear-gradient(180deg,#1f1f25,#17171b); border:2px solid #000; border-radius:16px; position:relative; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow)}
+  .item{width:48px; height:48px; border-radius:12px; background:#2f2f36; border:2px solid #000; display:grid; place-items:center; box-shadow:inset 0 3px 0 rgba(255,255,255,.06), 0 6px 16px rgba(0,0,0,.5); cursor:pointer; transition:transform .15s ease}
+  .item svg{width:30px; height:30px}
+  .item.selected{outline:3px solid var(--accent); transform:translateY(-2px)}
+  .toast{position:absolute; left:50%; transform:translateX(-50%); bottom:96px; background:rgba(20,20,24,.92); border:1px solid #000; padding:10px 14px; border-radius:12px; box-shadow:var(--shadow); font-weight:700; opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease}
+  .toast.show{opacity:1; transform:translate(-50%, -4px)}
+
+  /* Home Screen */
+  .home{position:absolute; inset:0; display:grid; place-items:center; background:radial-gradient(60% 50% at 50% 40%, #1e1e25, #0f0f14)}
+  .home .panel{width:min(680px,92vw); background:linear-gradient(180deg,#23232b,#17171d); border:2px solid #000; border-radius:22px; box-shadow:var(--shadow); padding:24px}
+  .title{font-size:clamp(28px,6vw,44px); font-weight:900; text-align:center; margin:10px 0 6px}
+  .subtitle{opacity:.9; text-align:center; margin-bottom:18px}
+  .home .actions{display:flex; gap:10px; flex-wrap:wrap; justify-content:center}
+  .home .logo{display:flex; gap:10px; justify-content:center; margin-bottom:10px}
+  .home .logo .cabin{width:56px; height:56px; border-radius:14px; background:linear-gradient(180deg,#5e3b1e,#3d260f); border:2px solid #000; position:relative; box-shadow:var(--shadow)}
+  .home .logo .cabin::before{content:""; position:absolute; left:6px; right:6px; top:18px; bottom:6px; background:linear-gradient(180deg,#7a4c25,#523114); border:2px solid #000; border-radius:10px}
+  .home .logo .cabin::after{content:""; position:absolute; left:18px; right:18px; top:28px; bottom:18px; background:#1f1f25; border:2px solid #000; border-radius:4px}
+
+  /* Common room canvas */
+  .wall{position:absolute; inset:0}
+  .floor{position:absolute; left:0; right:0; bottom:0; height:28%; background:repeating-linear-gradient(90deg, var(--wood) 0 22px, var(--wood-dark) 22px 44px); border-top:4px solid #000}
+  .wainscot{position:absolute; left:0; right:0; bottom:28%; height:10px; background:#00000060}
+  .window{position:absolute; top:14%; left:50%; transform:translateX(-50%); width:36%; height:34%; background:var(--sky); border:6px solid var(--win-frame); border-radius:10px; box-shadow:0 8px 0 rgba(0,0,0,.25)}
+  .window::before,.window::after{content:""; position:absolute; background:var(--win-frame)}
+  .window::before{left:50%; top:0; bottom:0; width:6px; transform:translateX(-50%)}
+  .window::after{left:0; right:0; top:50%; height:6px; transform:translateY(-50%)}
+
+  /* Dining Room (Scene 1) */
+  #dining .wall{background:linear-gradient(180deg,#6b3d20,#4a2a13)} /* brown wall */
+  .table{position:absolute; left:50%; bottom:18%; transform:translateX(-50%); width:64%; height:16%; background:linear-gradient(180deg,#cfa072,#b77f4c); border:4px solid #000; border-radius:14px; box-shadow:0 8px 0 rgba(0,0,0,.35)}
+  .chair{position:absolute; width:14%; height:22%; background:linear-gradient(180deg,#d6a879,#bf8b57); border:4px solid #000; border-radius:12px; bottom:18%}
+  .chair .back{position:absolute; left:10%; right:10%; top:-28%; height:28%; background:linear-gradient(180deg,#e2b98f,#c89461); border:4px solid #000; border-radius:10px}
+  .cushion{position:absolute; left:10%; right:10%; top:28%; height:44%; background:linear-gradient(180deg,#a3102f,#8e0e2a); border:4px solid #000; border-radius:10px}
+  #chairL{left:18%}
+  #chairR{right:18%}
+
+  /* Bedroom (Scene 2) */
+  #bedroom .wall{background:linear-gradient(180deg,#bfc4cc,#a7adb8)} /* light gray */
+  .shelf{position:absolute; left:12%; top:36%; width:28%; height:34%;}
+  .shelf .level{position:absolute; left:0; right:0; height:28%; background:linear-gradient(180deg,#8c5229,#5a361a); border:4px solid #000; border-radius:10px; box-shadow:0 6px 0 rgba(0,0,0,.35)}
+  .shelf .l1{top:68%}
+  .shelf .l2{top:36%}
+  .shelf .l3{top:4%; display:flex; align-items:center; justify-content:center}
+  .safe{width:68%; height:70%; background:linear-gradient(180deg,#565860,#3e4046); border:4px solid #000; border-radius:10px; position:relative; display:grid; place-items:center; box-shadow:inset 0 8px 0 rgba(255,255,255,.07)}
+  .safe .coinSlot{width:34px; height:34px; background:radial-gradient(circle at 30% 30%, #d9b873, #8c6b2e); border:4px solid #000; border-radius:50%; box-shadow:0 3px 0 rgba(0,0,0,.4)}
+  .safe.open{animation:pop .35s ease-out forwards}
+  @keyframes pop{0%{transform:scale(.96)}100%{transform:scale(1)}}
+  .axe{position:absolute; width:70px; height:70px; border-radius:12px; background:linear-gradient(180deg,#a0a7b2,#717783); border:4px solid #000; right:-90px; top:10px; display:none; align-items:center; justify-content:center}
+  .axe.show{display:flex}
+
+  /* Bathroom (Scene 3) */
+  #bathroom .wall{background:linear-gradient(180deg,#173a6a,#0e2a4e)} /* dark blue */
+  .bath-objects{position:absolute; left:8%; right:8%; bottom:18%; height:38%; display:grid; grid-template-columns:1fr 1fr 1fr; gap:4%}
+  .shower{background:linear-gradient(180deg,#d0dde8,#b3c4d3); border:4px solid #000; border-radius:14px; position:relative}
+  .toilet{background:linear-gradient(180deg,#d8e1ec,#c5d0dc); border:4px solid #000; border-radius:14px; position:relative}
+  .sink{background:linear-gradient(180deg,#e5ecf5,#cfd9e6); border:4px solid #000; border-radius:14px; position:relative; cursor:pointer}
+  .sink::after{content:""; position:absolute; right:10px; top:10px; width:26px; height:26px; border-radius:50%; background:radial-gradient(circle at 30% 30%,#7aa7ff,#3556a3); border:3px solid #000}
+
+  /* Basement Door (Scene 4) */
+  #basementDoor .wall{background:linear-gradient(180deg,#9aa0a7,#7d848c)}
+  .door{position:absolute; left:50%; transform:translateX(-50%); bottom:18%; width:32%; height:56%; background:linear-gradient(180deg,#7a4a20,#4d2f12); border:6px solid #000; border-radius:14px; box-shadow:0 8px 0 rgba(0,0,0,.4); cursor:pointer}
+  .door .knob{position:absolute; right:20px; top:48%; width:16px; height:16px; border-radius:50%; background:radial-gradient(circle at 40% 40%, #d3b66d, #8d6e2a); border:3px solid #000}
+  .door.locked{filter:saturate(.8) contrast(.9)}
+  .door.shake{animation:shake .3s linear}
+  @keyframes shake{0%{transform:translateX(calc(-50% - 2px))}25%{transform:translateX(calc(-50% + 4px))}50%{transform:translateX(calc(-50% - 4px))}75%{transform:translateX(calc(-50% + 2px))}100%{transform:translateX(-50%)}}
+
+  /* Basement Washing Room (Scene 5) */
+  #basement .wall{background:linear-gradient(180deg,#858a92,#6f7580)}
+  .machines{position:absolute; left:10%; right:10%; bottom:18%; height:40%; display:flex; gap:4%}
+  .machine{flex:1; background:linear-gradient(180deg,#d7dce4,#b7bec9); border:4px solid #000; border-radius:14px; position:relative}
+  .machine::before{content:""; position:absolute; left:50%; top:34%; transform:translate(-50%,-50%); width:44%; height:44%; border:4px solid #000; border-radius:50%; background:radial-gradient(circle at 30% 30%, #98a4af, #6f7986)}
+  .worktable{position:absolute; left:50%; transform:translateX(-50%); bottom:10%; width:46%; height:14%; background:linear-gradient(180deg,#bf905d,#94683b); border:4px solid #000; border-radius:14px; box-shadow:0 8px 0 rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center}
+  .knife-on-table{width:70px; height:34px; border-radius:10px; background:linear-gradient(180deg,#cfd6de,#a8b0bc); border:4px solid #000; position:relative; cursor:pointer}
+  .knife-on-table::after{content:""; position:absolute; left:6px; top:8px; width:22px; height:8px; background:linear-gradient(180deg,#7a4a20,#563214); border:3px solid #000; border-radius:6px}
+
+  /* Exit (Scene 6) */
+  #exit .wall{background:linear-gradient(180deg,#858a92,#6f7580)}
+  .boards{position:absolute; left:18%; right:18%; top:30%; bottom:26%; display:flex; align-items:center; justify-content:center; gap:10px}
+  .board{flex:1; height:22px; background:linear-gradient(180deg,#a86f3a,#7f4f21); border:4px solid #000; border-radius:12px; transform:rotate(var(--rot, 8deg)); box-shadow:0 6px 0 rgba(0,0,0,.35)}
+  .board:nth-child(2){--rot:-6deg}
+  .board:nth-child(3){--rot:5deg}
+  .open-air{display:none; position:absolute; left:12%; right:12%; top:26%; bottom:22%; background:linear-gradient(180deg,#7cc0ff,#a5d7ff); border:6px solid var(--win-frame); border-radius:12px}
+  .you-escaped{display:none; position:absolute; inset:0; background:radial-gradient(60% 50% at 50% 40%, rgba(0,0,0,.35), rgba(0,0,0,.75)); place-items:center; text-align:center}
+  .you-escaped .card{display:inline-block; padding:18px 22px; background:linear-gradient(180deg,#23232b,#17171d); border:2px solid #000; border-radius:18px; box-shadow:var(--shadow)}
+  .you-escaped h2{margin:.2em 0 .4em; font-size:clamp(24px,5vw,36px)}
+
+  /* Interaction targets */
+  .target{position:absolute}
+  .target.highlight{outline:4px dashed rgba(255,255,255,.4); outline-offset:2px}
+
+  /* Cursor state */
+  .using-item{cursor:crosshair}
+
+  /* Utility */
+  .hidden{display:none}
+
+</style>
+</head>
+<body>
+<div class="game" id="game">
+  <div class="topbar">
+    <div class="brand">Cabin Escape 3</div>
+    <div>
+      <button class="btn" id="btnHome">Home</button>
+      <button class="btn" id="btnReset">New Game</button>
+    </div>
+  </div>
+
+  <div class="scene" id="scene">
+    <!-- DINING ROOM (Scene 1) -->
+    <div class="room" id="dining" data-scene="dining">
+      <div class="wall"></div>
+      <div class="window"></div>
+      <div class="wainscot"></div>
+      <div class="floor"></div>
+      <div class="table"></div>
+      <div class="chair" id="chairL" >
+        <div class="back"></div>
+        <div class="cushion target" id="cushionL" data-target="cushion"></div>
+      </div>
+      <div class="chair" id="chairR">
+        <div class="back"></div>
+        <div class="cushion" ></div>
+      </div>
+      <div class="nav">
+        <div class="arrow left" id="toBedroom" title="Left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+        <div class="arrow right" id="toBasementDoor" title="Right">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- BEDROOM (Scene 2) -->
+    <div class="room" id="bedroom" data-scene="bedroom">
+      <div class="wall"></div>
+      <div class="window"></div>
+      <div class="wainscot"></div>
+      <div class="floor"></div>
+      <div class="shelf">
+        <div class="level l3"><div class="safe target" id="safe" data-target="safe"><div class="coinSlot"></div></div>
+          <div class="axe" id="axePickup"></div>
+        </div>
+        <div class="level l2"></div>
+        <div class="level l1"></div>
+      </div>
+      <div class="nav">
+        <div class="arrow left" id="toBathroom" title="Left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+        <div class="arrow right" id="toDiningFromBedroom" title="Right">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- BATHROOM (Scene 3) -->
+    <div class="room" id="bathroom" data-scene="bathroom">
+      <div class="wall"></div>
+      <div class="window"></div>
+      <div class="wainscot"></div>
+      <div class="floor"></div>
+      <div class="bath-objects">
+        <div class="shower"></div>
+        <div class="toilet"></div>
+        <div class="sink target" id="sink" data-target="sink"></div>
+      </div>
+      <div class="nav">
+        <div class="arrow right" id="toBedroomFromBathroom" title="Right">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- BASEMENT DOOR (Scene 4) -->
+    <div class="room" id="basementDoor" data-scene="basementDoor">
+      <div class="wall"></div>
+      <div class="wainscot"></div>
+      <div class="floor"></div>
+      <div class="door target locked" id="door" data-target="door"><div class="knob"></div></div>
+      <div class="nav">
+        <div class="arrow left" id="toDiningFromDoor" title="Left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- BASEMENT WASHING ROOM (Scene 5) -->
+    <div class="room" id="basement" data-scene="basement">
+      <div class="wall"></div>
+      <div class="wainscot"></div>
+      <div class="floor"></div>
+      <div class="machines">
+        <div class="machine"></div>
+        <div class="machine"></div>
+      </div>
+      <div class="worktable"><div class="knife-on-table" id="knifeOnTable"></div></div>
+      <div class="nav">
+        <div class="arrow left" id="toBasementDoorFromBasement" title="Left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+        <div class="arrow right" id="toExit" title="Right">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXIT (Scene 6) -->
+    <div class="room" id="exit" data-scene="exit">
+      <div class="wall"></div>
+      <div class="wainscot"></div>
+      <div class="floor"></div>
+      <div class="open-air" id="openAir"></div>
+      <div class="boards target" id="boards" data-target="boards">
+        <div class="board"></div>
+        <div class="board"></div>
+        <div class="board"></div>
+        <div class="board"></div>
+        <div class="board"></div>
+      </div>
+      <div class="nav">
+        <div class="arrow left" id="toBasementFromExit" title="Left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+      </div>
+      <div class="you-escaped" id="escapedOverlay"><div class="card"><h2>You Escaped!</h2><button class="btn" id="btnPlayAgain">Play Again</button></div></div>
+    </div>
+  </div>
+
+  <div class="inventory" id="inventory"></div>
+  <div class="toast" id="toast"></div>
+
+  <!-- HOME OVERLAY -->
+  <div class="home" id="home">
+    <div class="panel">
+      <div class="logo"><div class="cabin"></div></div>
+      <div class="title">Cabin Escape 3</div>
+      <div class="subtitle">Escape the cabin. No hints.</div>
+      <div class="actions">
+        <button class="btn" id="btnNew">New Game</button>
+        <button class="btn" id="btnContinue">Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'cabinEscape3State.v1';
+
+  /** @type {{scene:string, items:Record<string,boolean>, flags:Record<string,boolean>}} */
+  const defaultState = {
+    scene: 'home',
+    items: { key:false, knife:false, coin:false, axe:false },
+    flags: { cushionCut:false, safeOpen:false, basementUnlocked:false, boardsBroken:false }
+  };
+
+  let state = load() || structuredClone(defaultState);
+  let selectedItem = null; // id string
+
+  // UI refs
+  const rooms = {
+    dining: document.getElementById('dining'),
+    bedroom: document.getElementById('bedroom'),
+    bathroom: document.getElementById('bathroom'),
+    basementDoor: document.getElementById('basementDoor'),
+    basement: document.getElementById('basement'),
+    exit: document.getElementById('exit')
+  };
+  const home = document.getElementById('home');
+  const toast = document.getElementById('toast');
+
+  // Buttons / nav
+  document.getElementById('btnNew').addEventListener('click', () => startNew());
+  document.getElementById('btnContinue').addEventListener('click', () => { if(load()){ go('dining'); showHome(false);} else { ping('No save found'); } });
+  document.getElementById('btnReset').addEventListener('click', () => startNew());
+  document.getElementById('btnHome').addEventListener('click', () => showHome(true));
+  document.getElementById('btnPlayAgain').addEventListener('click', () => startNew());
+
+  // Scene nav
+  document.getElementById('toBedroom').addEventListener('click', () => go('bedroom'));
+  document.getElementById('toBasementDoor').addEventListener('click', () => go('basementDoor'));
+  document.getElementById('toDiningFromBedroom').addEventListener('click', () => go('dining'));
+  document.getElementById('toBathroom').addEventListener('click', () => go('bathroom'));
+  document.getElementById('toBedroomFromBathroom').addEventListener('click', () => go('bedroom'));
+  document.getElementById('toDiningFromDoor').addEventListener('click', () => go('dining'));
+  document.getElementById('toBasementDoorFromBasement').addEventListener('click', () => go('basementDoor'));
+  document.getElementById('toExit').addEventListener('click', () => go('exit'));
+  document.getElementById('toBasementFromExit').addEventListener('click', () => go('basement'));
+
+  // Interactive targets
+  document.getElementById('sink').addEventListener('click', () => {
+    if (!state.items.key) {
+      state.items.key = true; save();
+      buildInventory();
+      ping('Picked up a key');
+    }
+  });
+
+  const door = document.getElementById('door');
+  door.addEventListener('click', () => {
+    if (!state.flags.basementUnlocked) {
+      if (selectedItem === 'key') {
+        state.flags.basementUnlocked = true; save();
+        door.classList.remove('locked');
+        selectedItem = null; updateSelected();
+        ping('Unlocked');
+      } else {
+        door.classList.add('shake'); setTimeout(()=>door.classList.remove('shake'), 320);
+      }
+    } else {
+      go('basement');
+    }
+  });
+
+  document.getElementById('knifeOnTable').addEventListener('click', () => {
+    if (!state.items.knife) {
+      state.items.knife = true; save(); buildInventory(); ping('Knife');
+    }
+  });
+
+  // Cushion cut for coin
+  const cushion = document.getElementById('cushionL');
+  cushion.addEventListener('click', () => {
+    if (!state.flags.cushionCut) {
+      if (selectedItem === 'knife') {
+        state.flags.cushionCut = true; save();
+        selectedItem = null; updateSelected();
+        // grant coin directly (as per spec)
+        if (!state.items.coin) state.items.coin = true;
+        save(); buildInventory();
+        ping('Coin');
+        cushion.style.background = 'linear-gradient(180deg,#6b1022,#5a0c1c)';
+      } else {
+        // no effect when not using knife
+      }
+    }
+  });
+
+  // Safe interaction -> coin opens safe to get axe
+  const safe = document.getElementById('safe');
+  const axePickup = document.getElementById('axePickup');
+  safe.addEventListener('click', () => {
+    if (!state.flags.safeOpen) {
+      if (selectedItem === 'coin') {
+        state.flags.safeOpen = true; save();
+        selectedItem = null; updateSelected();
+        axePickup.classList.add('show');
+        safe.classList.add('open');
+        ping('Opened');
+      } else {
+        // untouched
+      }
+    }
+  });
+  axePickup.addEventListener('click', () => {
+    if (state.flags.safeOpen && !state.items.axe) {
+      state.items.axe = true; save(); buildInventory(); axePickup.classList.remove('show'); ping('Axe');
+    }
+  });
+
+  // Boards -> use axe to escape
+  const boards = document.getElementById('boards');
+  const openAir = document.getElementById('openAir');
+  const escapedOverlay = document.getElementById('escapedOverlay');
+  boards.addEventListener('click', () => {
+    if (!state.flags.boardsBroken) {
+      if (selectedItem === 'axe') {
+        state.flags.boardsBroken = true; save();
+        selectedItem = null; updateSelected();
+        boards.style.display = 'none';
+        openAir.style.display = 'block';
+        setTimeout(()=>escapedOverlay.style.display='grid', 350);
+      } else {
+        // nothing
+      }
+    }
+  });
+
+  // Inventory rendering & selection
+  const inventoryBar = document.getElementById('inventory');
+  function buildInventory(){
+    inventoryBar.innerHTML = '';
+    const items = Object.keys(state.items).filter(k => state.items[k]);
+    if (items.length === 0) {
+      const slot = document.createElement('div'); slot.className='slot'; slot.style.opacity=.7; slot.textContent='Inventory'; slot.style.display='grid'; slot.style.placeItems='center'; slot.style.fontWeight='800';
+      inventoryBar.appendChild(slot);
+      return;
+    }
+    items.forEach(id => {
+      const slot = document.createElement('div'); slot.className='slot';
+      const el = document.createElement('div'); el.className='item'; el.dataset.id = id; el.title = id;
+      el.appendChild(getItemIcon(id));
+      if (selectedItem === id) el.classList.add('selected');
+      el.addEventListener('click', () => {
+        selectedItem = (selectedItem === id) ? null : id; updateSelected();
+      });
+      slot.appendChild(el); inventoryBar.appendChild(slot);
+    });
+  }
+
+  function updateSelected(){
+    document.querySelectorAll('.item').forEach(el => el.classList.toggle('selected', el.dataset.id === selectedItem));
+    document.getElementById('game').classList.toggle('using-item', !!selectedItem);
+    // subtle target highlighting when an item is selected
+    document.querySelectorAll('.target').forEach(t => {
+      const ok = canUseOn(selectedItem, t.dataset.target);
+      t.classList.toggle('highlight', !!selectedItem && ok);
+    });
+  }
+
+  function canUseOn(item, target){
+    if (!item) return false;
+    const map = {
+      knife: ['cushion'],
+      coin: ['safe'],
+      axe: ['boards'],
+      key: ['door']
+    };
+    return (map[item] || []).includes(target);
+  }
+
+  // Item icons (inline SVG)
+  function getItemIcon(id){
+    const wrap = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    wrap.setAttribute('viewBox','0 0 64 64');
+    wrap.setAttribute('aria-hidden','true');
+    const p = (d, fill, stroke='#000') => {const e=document.createElementNS('http://www.w3.org/2000/svg','path'); e.setAttribute('d',d); e.setAttribute('fill',fill); e.setAttribute('stroke',stroke); e.setAttribute('stroke-width','3'); return e;};
+    if (id==='key'){
+      wrap.appendChild(p('M10 36h18l4-4 6 6-6 6-4-4v8H10z', '#d8b45a'));
+      wrap.appendChild(p('M44 20a10 10 0 1 1-20 0 10 10 0 0 1 20 0z', '#ebd486'));
+    } else if (id==='knife'){
+      wrap.appendChild(p('M8 40l12 12 26-26-12-12z', '#cfd6de'));
+      wrap.appendChild(p('M8 40l10-10 6 6-10 10z', '#7a4a20'));
+    } else if (id==='coin'){
+      wrap.appendChild(p('M12 32a20 20 0 1 0 40 0 20 20 0 1 0-40 0z', '#e0b85e'));
+      wrap.appendChild(p('M16 32a16 16 0 1 0 32 0 16 16 0 1 0-32 0z', '#f2cf7a'));
+    } else if (id==='axe'){
+      wrap.appendChild(p('M12 48l6 6L50 22l-6-6z', '#a0a7b2'));
+      wrap.appendChild(p('M10 50l8 8 8-8-8-8z', '#7a4a20'));
+    }
+    return wrap;
+  }
+
+  // Scene control
+  function go(name){
+    Object.values(rooms).forEach(r => r.classList.remove('active'));
+    rooms[name].classList.add('active');
+    state.scene = name; save();
+    // update door lock visual
+    document.getElementById('door').classList.toggle('locked', !state.flags.basementUnlocked);
+    // show axe pickup if safe opened
+    axePickup.classList.toggle('show', state.flags.safeOpen && !state.items.axe);
+    // boards / open air
+    if (state.flags.boardsBroken){
+      document.getElementById('boards').style.display='none';
+      document.getElementById('openAir').style.display='block';
+    }
+    updateSelected();
+  }
+
+  // Toast
+  let toastTimer=null;
+  function ping(msg){
+    toast.textContent = msg; toast.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(()=> toast.classList.remove('show'), 1100);
+  }
+
+  // Save / Load
+  function save(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ /* ignore */ }
+  }
+  function load(){
+    try{ const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : null; }catch(e){ return null }
+  }
+
+  function showHome(v){ home.style.display = v ? 'grid' : 'none'; }
+  function startNew(){ state = structuredClone(defaultState); save(); buildInventory(); go('dining'); showHome(false); selectedItem = null; updateSelected(); resetVisuals(); }
+  function resetVisuals(){
+    // reset cushion color
+    document.getElementById('cushionL').style.background = 'linear-gradient(180deg,#a3102f,#8e0e2a)';
+    // reset door lock
+    document.getElementById('door').classList.add('locked');
+    // reset boards/open
+    document.getElementById('boards').style.display='flex';
+    document.getElementById('openAir').style.display='none';
+    document.getElementById('escapedOverlay').style.display='none';
+    document.getElementById('axePickup').classList.remove('show');
+  }
+
+  // Initialize
+  buildInventory();
+  if (state.scene === 'home') { showHome(true); } else { showHome(false); go(state.scene); }
+})();
+</script>
+</body>
+</html>
